@@ -12,8 +12,7 @@ services:
      image: adrianharabula/php7-with-oci8
      volumes:
       - ./www:/var/www/html
-     ports:
-      - "8181:80"
+     
 
    mysql:
      image: mysql:5.7
