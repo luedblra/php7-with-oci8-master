@@ -1,4 +1,6 @@
-FROM php:7.1-apache
+FROM php:7.1.3-apache
+
+RUN printf "deb http://archive.debian.org/debian/ jessie main\ndeb-src http://archive.debian.org/debian/ jessie main\ndeb http://security.debian.org jessie/updates main\ndeb-src http://security.debian.org jessie/updates main" > /etc/apt/sources.list
 
 RUN apt-get update && apt-get install -y \
         unzip \
@@ -18,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update -y
 RUN apt-get install -y libgmp-dev re2c libmhash-dev libmcrypt-dev file
 RUN ln -s /usr/include/x86_64-linux-gnu/gmp.h /usr/local/include/
-RUN docker-php-ext-configure gmp 
+RUN docker-php-ext-configure gmp
 RUN docker-php-ext-install gmp
 
 RUN docker-php-ext-configure mcrypt
@@ -27,7 +29,7 @@ RUN docker-php-ext-install -j$(nproc) mcrypt
 # Install imap extension
 RUN apt-get install -y openssl
 RUN apt-get install -y libc-client-dev
-RUN apt-get install -y libkrb5-dev 
+RUN apt-get install -y libkrb5-dev
 RUN docker-php-ext-configure imap --with-kerberos --with-imap-ssl
 RUN docker-php-ext-install imap
 
@@ -52,6 +54,9 @@ RUN docker-php-ext-install tokenizer
 # Install ftp extension
 RUN docker-php-ext-install ftp
 
+
+
+
 # APC
 RUN pear config-set php_ini /usr/local/etc/php/php.ini
 RUN pecl config-set php_ini /usr/local/etc/php/php.ini
@@ -71,9 +76,11 @@ RUN curl -sS https://getcomposer.org/installer | php
 RUN mv composer.phar /usr/local/bin/composer
 RUN ln -s /usr/local/bin/composer /usr/bin/composer
 #RUN curl -sL https://deb.nodesource.com/setup | bash -
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash 
+RUN curl -sL https://deb.nodesource.com/setup_8.x | bash
 RUN apt-get install -yq nodejs build-essential
 #RUN npm install -g phantomjs-prebuilt casperjs
+
+RUN docker-php-ext-install mbstring
 
 # Edit PHP INI
 RUN echo "memory_limit = 1G" > /usr/local/etc/php/php.ini
@@ -99,7 +106,6 @@ RUN a2enmod rewrite
 
 RUN printf "log_errors = On \nerror_log = /dev/stderr\n" > /usr/local/etc/php/conf.d/php-logs.ini
 
-# RUN a2enmod rewrite
 
 # Oracle instantclient
 ADD instantclient/instantclient-basiclite-linux.x64-12.2.0.1.0.zip /tmp/
@@ -118,23 +124,24 @@ RUN echo 'export LD_LIBRARY_PATH="/usr/local/instantclient"' >> /root/.bashrc
 RUN echo 'umask 002' >> /root/.bashrc
 
 RUN echo 'instantclient,/usr/local/instantclient' | pecl install oci8
-RUN echo "extension=oci8.so" > /usr/local/etc/php/conf.d/php-oci8.ini
-
+#RUN echo "extension=oci8.so" > /usr/local/etc/php/conf.d/php-oci8.ini
 
 RUN apt-get install nano -y
 
 RUN echo "<?php echo phpinfo(); ?>" > /var/www/html/phpinfo.php
-
-EXPOSE 80
+RUN echo "extension=oci8.so" > /usr/local/etc/php/php.ini
 
 RUN chown -R www-data:www-data /var/www/html
-ADD ./usuariosafectados /var/www/html/
+ADD ./usuarios_afectados /var/www/html/
 
 # Change working directory
 WORKDIR /var/www/html
 
 # Install and update laravel (rebuild into vendor folder)
-RUN composer install
+RUN ldconfig
+RUN php -i | grep php.ini
+RUN ls /var/www/html
+RUN composer update
 
 RUN composer install
 
@@ -142,15 +149,11 @@ RUN composer install
 #RUN php artisan route:cache
 
 # Laravel writing rights
-RUN chgrp -R www-data /var/www/html/storage 
+RUN chgrp -R www-data /var/www/html/storage
 RUN chgrp -R www-data /var/www/html/bootstrap/cache
-RUN chmod -R ug+rwx /var/www/html/storage 
+RUN chmod -R ug+rwx /var/www/html/storage
 RUN chmod -R ug+rwx /var/www/html/bootstrap/cache
 
-# Change your local - here it's in french
-RUN echo "locales locales/default_environment_locale select fr_FR.UTF-8" | debconf-set-selections \
-&& echo "locales locales/locales_to_be_generated multiselect 'fr_FR.UTF-8 UTF-8'" | debconf-set-selections
-RUN echo "Europe/Paris" > /etc/timezone && dpkg-reconfigure -f noninteractive tzdata
 
 # Create Laravel folders (mandatory)
 RUN mkdir -p /var/www/html/storage/framework
@@ -162,7 +165,7 @@ RUN mkdir -p /var/www/html/storage/cache
 
 # Change folder permission
 RUN chmod -R 0777 /var/www/html/storage/
-RUN rm /var/www/html/public/storage
+CMD sudo rm /var/www/html/public/storage
 
 # Custom ini file in php conf folder
 #COPY config/custom.ini /usr/local/etc/php/conf.d/
@@ -170,3 +173,5 @@ RUN rm /var/www/html/public/storage
 # Running artisan commands
 CMD php artisan config:cache
 CMD php artisan cache:clear
+
+EXPOSE 80
